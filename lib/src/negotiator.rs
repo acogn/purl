@@ -47,7 +47,17 @@ impl<'a> PaymentNegotiator<'a> {
     /// If networks is empty, all networks are allowed.
     #[must_use]
     pub fn with_allowed_networks(mut self, networks: &[String]) -> Self {
-        self.allowed_networks = networks.to_vec();
+        self.allowed_networks = networks
+            .iter()
+            .map(|network| {
+                let canonical = crate::network::resolve_network_alias(network);
+                if canonical.is_empty() {
+                    network.clone()
+                } else {
+                    canonical.to_string()
+                }
+            })
+            .collect();
         self
     }
 
@@ -128,11 +138,22 @@ impl<'a> PaymentNegotiator<'a> {
     /// Check if the requirement's network passes the filter.
     #[inline]
     fn matches_network_filter(&self, requirement: &PaymentRequirements) -> bool {
-        self.allowed_networks.is_empty()
-            || self
-                .allowed_networks
-                .iter()
-                .any(|n| n == requirement.network())
+        if self.allowed_networks.is_empty() {
+            return true;
+        }
+
+        let requirement_network = {
+            let canonical = crate::network::resolve_network_alias(requirement.network());
+            if canonical.is_empty() {
+                requirement.network()
+            } else {
+                canonical
+            }
+        };
+
+        self.allowed_networks
+            .iter()
+            .any(|network| network == requirement_network)
     }
 
     /// Check if the token is supported (has decimals configured).
@@ -177,6 +198,7 @@ impl<'a> PaymentNegotiator<'a> {
 mod tests {
     use super::*;
     use crate::config::{Config, EvmConfig};
+    use crate::x402::v2;
 
     fn make_test_config() -> Config {
         Config {
@@ -207,6 +229,39 @@ mod tests {
                 max_timeout_seconds: 300,
                 extra: Some(serde_json::json!({"name": "USDC", "version": "1"})),
             }],
+        })
+    }
+
+    fn make_test_v2_requirements() -> PaymentRequirementsResponse {
+        PaymentRequirementsResponse::V2(v2::PaymentRequired {
+            x402_version: 2,
+            error: None,
+            accepts: vec![
+                v2::PaymentRequirements {
+                    scheme: "exact".to_string(),
+                    network: "eip155:8453".to_string(),
+                    amount: "10000".to_string(),
+                    asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".to_string(),
+                    pay_to: "0x110cdBba7FE6434Ec4CE3464CC523942ad6Fb784".to_string(),
+                    max_timeout_seconds: 60,
+                    extra: Some(serde_json::json!({"name": "USD Coin", "version": "2"})),
+                },
+                v2::PaymentRequirements {
+                    scheme: "exact".to_string(),
+                    network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp".to_string(),
+                    amount: "10000".to_string(),
+                    asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(),
+                    pay_to: "8XhngTRitTcUJMiaDJ6azw8GRSiFPpwhnmV3HYQLHUpL".to_string(),
+                    max_timeout_seconds: 60,
+                    extra: Some(serde_json::json!({"name": "USD Coin", "version": "2"})),
+                },
+            ],
+            resource: v2::ResourceInfo {
+                url: "https://example.com/paid".to_string(),
+                description: Some("Test endpoint".to_string()),
+                mime_type: Some("application/json".to_string()),
+            },
+            extensions: None,
         })
     }
 
@@ -266,5 +321,33 @@ mod tests {
         let result = negotiator.select_from_requirements(&requirements);
 
         assert!(matches!(result, Err(PurlError::NoPaymentMethods)));
+    }
+
+    #[test]
+    fn test_negotiator_network_filter_matches_caip2_aliases() {
+        let config = make_test_config();
+        let requirements = make_test_v2_requirements();
+
+        let negotiator = PaymentNegotiator::new(&config)
+            .with_allowed_networks(&["base".to_string(), "base-sepolia".to_string()]);
+        let result = negotiator.select_from_requirements(&requirements);
+
+        assert!(result.is_ok(), "Expected Ok, got: {result:?}");
+        let selected = result.unwrap();
+        assert_eq!(selected.network(), "eip155:8453");
+    }
+
+    #[test]
+    fn test_negotiator_network_filter_accepts_mixed_alias_inputs() {
+        let config = make_test_config();
+        let requirements = make_test_v2_requirements();
+
+        let negotiator =
+            PaymentNegotiator::new(&config).with_allowed_networks(&["eip155:8453".to_string()]);
+        let result = negotiator.select_from_requirements(&requirements);
+
+        assert!(result.is_ok(), "Expected Ok, got: {result:?}");
+        let selected = result.unwrap();
+        assert_eq!(selected.network(), "eip155:8453");
     }
 }
