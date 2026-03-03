@@ -49,14 +49,7 @@ impl<'a> PaymentNegotiator<'a> {
     pub fn with_allowed_networks(mut self, networks: &[String]) -> Self {
         self.allowed_networks = networks
             .iter()
-            .map(|network| {
-                let canonical = crate::network::resolve_network_alias(network);
-                if canonical.is_empty() {
-                    network.clone()
-                } else {
-                    canonical.to_string()
-                }
-            })
+            .map(|network| crate::network::resolve_network_alias(network).to_string())
             .collect();
         self
     }
@@ -142,14 +135,7 @@ impl<'a> PaymentNegotiator<'a> {
             return true;
         }
 
-        let requirement_network = {
-            let canonical = crate::network::resolve_network_alias(requirement.network());
-            if canonical.is_empty() {
-                requirement.network()
-            } else {
-                canonical
-            }
-        };
+        let requirement_network = crate::network::resolve_network_alias(requirement.network());
 
         self.allowed_networks
             .iter()
