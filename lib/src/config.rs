@@ -659,8 +659,7 @@ mod tests {
     }
 
     /// A known-valid 32-byte hex private key used across wallet-override tests.
-    const TEST_EVM_KEY: &str =
-        "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    const TEST_EVM_KEY: &str = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
 
     #[test]
     fn test_available_payment_methods_with_private_key_override() {

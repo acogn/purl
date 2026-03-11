@@ -254,8 +254,7 @@ mod tests {
     use crate::payment_provider::PaymentProvider;
     use crate::x402::{v2, PaymentRequirements as UnifiedRequirements};
 
-    const TEST_EVM_KEY: &str =
-        "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    const TEST_EVM_KEY: &str = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
 
     fn make_test_requirements() -> UnifiedRequirements {
         let req = v2::PaymentRequirements {
